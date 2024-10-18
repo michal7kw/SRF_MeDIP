@@ -1,0 +1,59 @@
+#!/bin/bash
+
+# Step 1: Quality Control
+for file in *.fastq.gz
+do
+    fastqc $file
+done
+
+# Step 2: Trim adapters and low-quality bases
+for file in *_r1.fastq.gz
+do
+    base=$(basename $file _r1.fastq.gz)
+    trimmomatic PE -threads 4 ${base}_r1.fastq.gz ${base}_r2.fastq.gz \
+                   ${base}_r1_trimmed.fastq.gz ${base}_r1_unpaired.fastq.gz \
+                   ${base}_r2_trimmed.fastq.gz ${base}_r2_unpaired.fastq.gz \
+                   ILLUMINACLIP:TruSeq3-PE.fa:2:30:10 LEADING:3 TRAILING:3 SLIDINGWINDOW:4:15 MINLEN:36
+done
+
+# Step 3: Align reads to reference genome
+for file in *_r1_trimmed.fastq.gz
+do
+    base=$(basename $file _r1_trimmed.fastq.gz)
+    bowtie2 -p 4 -x /path/to/mouse_genome_index -1 ${base}_r1_trimmed.fastq.gz -2 ${base}_r2_trimmed.fastq.gz | \
+    samtools view -bS - > ${base}.bam
+done
+
+# Step 4: Sort and index BAM files
+for file in *.bam
+do
+    base=$(basename $file .bam)
+    samtools sort $file -o ${base}_sorted.bam
+    samtools index ${base}_sorted.bam
+done
+
+# Step 5: Remove duplicates
+for file in *_sorted.bam
+do
+    base=$(basename $file _sorted.bam)
+    picard MarkDuplicates I=$file O=${base}_dedup.bam M=${base}_metrics.txt REMOVE_DUPLICATES=true
+done
+
+# Step 6: Call peaks
+for file in *_dedup.bam
+do
+    base=$(basename $file _dedup.bam)
+    if [[ $base == *"input"* ]]; then
+        continue
+    fi
+    input_file="${base/_output/_input}_dedup.bam"
+    macs2 callpeak -t $file -c $input_file -f BAM -g mm -n $base -q 0.05
+done
+
+# Step 7: Differential methylation analysis
+# (This step would typically be done in R, so we'll just prepare the command)
+echo "Rscript differential_methylation_analysis.R"
+
+# Step 8: Functional annotation
+# (This step would also typically be done in R)
+echo "Rscript functional_annotation.R"

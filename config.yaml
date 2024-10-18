@@ -1,0 +1,32 @@
+# MeDIP-seq analysis pipeline configuration
+
+# Paths
+genome_index: /beegfs/scratch/ric.broccoli/kubacki.michal/SRF_ChipSeq/mm10_bowtie2_index/mm10
+adapters: "/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_MeDIP/DATA/TruSeq3-PE.fa"
+
+# Trimmomatic parameters
+trimmomatic_params: "2:30:10 LEADING:3 TRAILING:3 SLIDINGWINDOW:4:15 MINLEN:36"
+
+# MACS2 parameters
+genome_size: "mm"  # for mouse genome
+macs2_qvalue: 0.05
+
+# Differential methylation analysis parameters
+min_diff: 0.2
+fdr_threshold: 0.05
+
+# Functional annotation parameters
+go_database: "org.Mm.eg.db"  # for mouse
+kegg_database: "mmu"  # for mouse
+
+# Output directories
+fastqc_outdir: "qc"
+trimmed_outdir: "trimmed"
+aligned_outdir: "aligned"
+dedup_outdir: "dedup"
+peaks_outdir: "peaks"
+diff_meth_outdir: "diff_meth"
+func_annot_outdir: "func_annot"
+
+# Resources
+threads: 4
