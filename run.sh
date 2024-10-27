@@ -1,42 +1,66 @@
 #!/bin/bash
-#SBATCH --job-name=chipseq
+#SBATCH --job-name=medip_seq
 #SBATCH --account=kubacki.michal
 #SBATCH --mem=128GB
 #SBATCH --time=INFINITE
 #SBATCH --nodes=2
 #SBATCH --ntasks=64
+#SBATCH --ntasks-per-node=32
 #SBATCH --mail-type=ALL
 #SBATCH --mail-user=kubacki.michal@hsr.it
-#SBATCH --error="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_MeDIP/logs/log.err"
-#SBATCH --output="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_MeDIP/logs/log.out"
+#SBATCH --error="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_MeDIP/logs/medip_seq_%j.err"
+#SBATCH --output="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_MeDIP/logs/medip_seq_%j.out"
 
-# Load the appropriate conda environment (if needed)
+# Load the appropriate conda environment
 source /opt/common/tools/ric.cosr/miniconda3/bin/activate
 conda activate jupyter_nb
 
-# Define the cluster submission command
+# Set conda package cache directory
+export CONDA_PKGS_DIRS="/beegfs/scratch/ric.broccoli/kubacki.michal/conda_pkgs"
 
-# Run Snakemake
-# snakemake --verbose -j 1
+# Set temporary directories for various components
+export TMPDIR="/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_MeDIP/tmp"
+export SNAKEMAKE_CONDA_PREFIX="/beegfs/scratch/ric.broccoli/kubacki.michal/conda_envs"
+export XDG_CACHE_HOME="/beegfs/scratch/ric.broccoli/kubacki.michal/cache"
+export SNAKEMAKE_PERSISTENT_CACHE="/beegfs/scratch/ric.broccoli/kubacki.michal/snakemake_cache"
 
-# snakemake --unlock
-snakemake --snakefile Snakefile --latency-wait 60 --configfile config.yaml --use-conda -p --printshellcmds --rerun-incomplete
-# snakemake -n --snakefile Snakefile -p --verbose --configfile config.yaml
+# Create all necessary directories
+mkdir -p "$TMPDIR"
+mkdir -p "$SNAKEMAKE_CONDA_PREFIX"
+mkdir -p "$XDG_CACHE_HOME"
+mkdir -p "$SNAKEMAKE_PERSISTENT_CACHE"
 
+# Clean up any existing temporary files before starting
+rm -rf "$TMPDIR"/*
+rm -rf ~/.cache/snakemake/*
 
+# Clear any potential locks
+snakemake --unlock
 
+# Remove existing conda environments to force recreation
+rm -rf "$SNAKEMAKE_CONDA_PREFIX"/*
 
+# Run a dry-run first to check workflow
+echo "Performing dry-run..."
+snakemake --dry-run -p -n
 
-# --ntasks=256
-# --nodes=8
-# --ntasks-per-node=32
+# Run Snakemake with optimal settings for MeDIP-seq pipeline
+snakemake \
+    --snakefile Snakefile \
+    --configfile config.yaml \
+    --use-conda \
+    --conda-prefix "/beegfs/scratch/ric.broccoli/kubacki.michal/conda_envs" \
+    --cores 64 \
+    --keep-going \
+    --rerun-incomplete \
+    --latency-wait 60 \
+    --printshellcmds \
+    --resources mem_mb=128000 \
+    --nolock \
+    2>&1 | tee "logs/snakemake_$(date +%Y%m%d_%H%M%S).log"
 
-# snakemake --unlock --snakefile Snakefile --configfile config.yaml --use-conda --cores all -p
-# snakemake --unlock --snakefile Snakefile --configfile config.yaml --use-conda --cores all -p --printshellcmds --keep-going --rerun-incomplete
-# snakemake --snakefile Snakefile --configfile config.yaml --use-conda --cores all -p --printshellcmds --keep-going --rerun-incomplete
+# Create summary of run
+snakemake --summary > "logs/workflow_summary_$(date +%Y%m%d_%H%M%S).txt"
 
-# snakemake --unlock --snakefile Snakefile --configfile config.yaml --use-conda \
-#     --cluster "srun --nodes=1 --ntasks=1 --cpus-per-task={threads}" \
-#     --jobs 128 -p
-
-# snakemake --unlock
+# Add cleanup at the end of your script
+trap 'rm -rf "$TMPDIR"/*' EXIT
