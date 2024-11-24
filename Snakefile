@@ -68,9 +68,28 @@ rule all:
         join(config["meth_level_outdir"], "methylation_levels.txt")
 
 # Add this line near the top of your Snakefile
-conda_prefix = "/beegfs/scratch/ric.broccoli/kubacki.michal/conda_envs"
+# conda_prefix = "/beegfs/scratch/ric.broccoli/kubacki.michal/conda_envs"
 
 # Update the rules to use the new conda environments
+
+# Add near the top of the file, after imports
+conda_envs = {
+    "align": "envs/align.yaml",
+    "fastqc": "envs/qc.yaml",
+    "trimmomatic": "envs/trim.yaml",
+    "mark_duplicates": "envs/dedup.yaml",
+    "call_peaks": "envs/peaks.yaml"
+}
+
+# Add at the top of the file after imports
+resource_config = {
+    "trimmomatic": {"mem_mb": 16000, "ntasks": 4, "runtime": 360},  # 6 hours = 360 minutes
+    "align": {"mem_mb": 32000, "ntasks": 8, "runtime": 720},        # 12 hours = 720 minutes
+    "mark_duplicates": {"mem_mb": 32000, "ntasks": 4, "runtime": 480},  # 8 hours = 480 minutes
+    "call_peaks": {"mem_mb": 16000, "ntasks": 4, "runtime": 480},   # 8 hours = 480 minutes
+    "fastqc": {"mem_mb": 8000, "ntasks": 1, "runtime": 120},        # 2 hours = 120 minutes
+    "sort_and_index": {"mem_mb": 16000, "ntasks": 4, "runtime": 240}  # 4 hours = 240 minutes
+}
 
 rule fastqc:
     input:
@@ -80,8 +99,6 @@ rule fastqc:
         zip = join(config["fastqc_outdir"], "{sample}_fastqc.zip")
     log:
         "logs/fastqc/{sample}.log"
-    conda:
-        "envs/qc.yaml"
     shell:
         """
         fastqc {input} -o {config[fastqc_outdir]}/ 2> {log}
@@ -95,9 +112,11 @@ rule trimmomatic:
         trimmed=join(config["trimmed_outdir"], "{sample}_trimmed.fastq.gz")
     log:
         "logs/trimmomatic/{sample}.log"
-    conda:
-        "envs/qc.yaml"
     threads: 4
+    resources:
+        mem_mb = resource_config["trimmomatic"]["mem_mb"],
+        ntasks = resource_config["trimmomatic"]["ntasks"],
+        runtime = resource_config["trimmomatic"]["runtime"]
     shell:
         """
         trimmomatic SE -threads {threads} \
@@ -116,32 +135,69 @@ rule fastqc_trimmed:
         join(config["fastqc_outdir"], "{sample}_trimmed_fastqc.html")
     log:
         "logs/fastqc_trimmed/{sample}.log"
-    conda:
-        "envs/qc.yaml"
     shell:
         """
         fastqc {input} -o {config[fastqc_outdir]}/ 2> {log}
         """
 
-# Rule to align reads to the reference genome using Bowtie2
+# Near the top of the Snakefile, add resource configurations
+localrules: all, check_input_files, multiqc
+
+# Add cluster resource configurations
+cluster_resource_defaults = {
+    "__default__": {
+        "time": "4:00:00",
+        "mem": "8G",
+        "cpus": 1
+    },
+    "align": {
+        "time": "12:00:00",
+        "mem": "32G",
+        "cpus": 8
+    },
+    "sort_and_index": {
+        "time": "6:00:00",
+        "mem": "16G",
+        "cpus": 4
+    },
+    "mark_duplicates": {
+        "time": "8:00:00",
+        "mem": "32G",
+        "cpus": 4
+    },
+    "call_peaks": {
+        "time": "8:00:00",
+        "mem": "16G",
+        "cpus": 4
+    },
+    "create_bigwig": {
+        "time": "6:00:00",
+        "mem": "16G",
+        "cpus": 4
+    }
+}
+
+# Remove the first align rule and keep only this optimized version
 rule align:
     input:
         join(config["trimmed_outdir"], "Medip_{sample}_trimmed.fastq.gz")
     output:
         join(config["aligned_outdir"], "Medip_{sample}.bam")
     params:
-        index = config["genome_index"]
-    threads: config["threads"]
+        index = config["genome_index"],
+        extra = config["bowtie2_params"]
+    threads: 16
+    resources:
+        mem_mb = 32000,
+        runtime = 720  # 12 hours = 720 minutes
     log:
         "logs/align/{sample}.log"
-    conda:
-        "envs/align.yaml"
     shell:
         """
         set -e
         set -o pipefail
-        bowtie2 -p {threads} -x {params.index} -U {input} 2> {log} | \
-        samtools view -bS - > {output}
+        bowtie2 -p {threads} {params.extra} -x {params.index} -U {input} 2> {log} | \
+        samtools view -@ {threads} -bS - > {output}
         """
 
 # Rule to sort and index BAM files
@@ -152,8 +208,6 @@ rule sort_and_index:
         bam = join(config["aligned_outdir"], "{sample}_sorted.bam"),
         bai = join(config["aligned_outdir"], "{sample}_sorted.bam.bai")
     threads: config["threads"]
-    conda:
-        "envs/align.yaml"
     shell:
         """
         # Sort BAM file
@@ -172,8 +226,6 @@ rule mark_duplicates:
         metrics = join(config["dedup_outdir"], "{sample}_markdup_metrics.txt")
     log:
         "logs/mark_duplicates/{sample}.log"
-    conda:
-        "envs/qc.yaml"
     shell:
         """
         # Mark duplicates using Picard tools
@@ -189,8 +241,6 @@ rule remove_duplicates:
     output:
         bam = join(config["dedup_outdir"], "{sample}_dedup.bam"),
         metrics = join(config["dedup_outdir"], "{sample}_metrics.txt")
-    conda:
-        "envs/qc.yaml"
     shell:
         """
         # Remove duplicates using Picard tools
@@ -225,8 +275,6 @@ rule call_peaks:
         extsize = "--extsize 300"
     log:
         "logs/call_peaks/{condition}_{replicate}.log"
-    conda:
-        "envs/macs2.yaml"
     shell:
         """
         macs2 callpeak -t {input.ip} -c {input.control} -f BAM -g {params.genome_size} \
@@ -245,8 +293,6 @@ rule differential_methylation:
         join(config["diff_meth_outdir"], "differential_methylation_results.txt")
     log:
         "logs/differential_methylation.log"
-    conda:
-        "envs/diff_meth.yaml"
     script:
         "scripts/differential_methylation.R"
         
@@ -259,8 +305,6 @@ rule multiqc:
         report = join(config["qc_outdir"], "multiqc_report.html")
     log:
         "logs/multiqc.log"
-    conda:
-        "envs/qc.yaml"
     shell:
         """
         rm -f {output.report}  # Remove existing report
@@ -285,8 +329,6 @@ rule functional_annotation:
         kegg_csv = join(config["func_annot_outdir"], "kegg_enrichment_results.csv"),
         go_plot = join(config["func_annot_outdir"], "go_dotplot.pdf"),
         kegg_plot = join(config["func_annot_outdir"], "kegg_dotplot.pdf")
-    conda:
-        "envs/func_annot.yaml"
     script:
         "scripts/functional_annotation.R"
 
@@ -299,8 +341,6 @@ rule create_bigwig:
         bw = join(config["bigwig_outdir"], "{sample}.bw")
     log:
         "logs/create_bigwig/{sample}.log"
-    conda:
-        "envs/qc.yaml"
     shell:
         """
         # Create BigWig file using bamCoverage
@@ -315,8 +355,6 @@ rule fragment_size_distribution:
         join(config["qc_outdir"], "fragment_size_distribution.pdf")
     log:
         "logs/fragment_size_distribution.log"
-    conda:
-        "envs/qc.yaml"
     script:
         "scripts/fragment_size_distribution.R"
 
@@ -328,8 +366,6 @@ rule cpg_enrichment:
         join(config["qc_outdir"], "cpg_enrichment.txt")
     log:
         "logs/cpg_enrichment.log"
-    conda:
-        "envs/qc.yaml"
     script:
         "scripts/cpg_enrichment.R"
 
@@ -341,8 +377,6 @@ rule replicate_correlation:
         join(config["qc_outdir"], "replicate_correlation.pdf")
     log:
         "logs/replicate_correlation.log"
-    conda:
-        "envs/replicate_corr.yaml"
     script:
         "scripts/replicate_correlation.R"
 
@@ -356,8 +390,6 @@ rule methylation_levels:
         join(config["meth_level_outdir"], "methylation_levels.txt")
     log:
         "logs/methylation_levels.log"
-    conda:
-        "envs/meth_levels.yaml"
     script:
         "scripts/methylation_levels.R"
 

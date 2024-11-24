@@ -1,23 +1,23 @@
 # MeDIP-seq analysis pipeline configuration
 
 # Paths
-genome_index: /beegfs/scratch/ric.broccoli/kubacki.michal/SRF_ChipSeq/mm10_bowtie2_index/mm10
+genome_index: /beegfs/scratch/ric.broccoli/kubacki.michal/SRF_CUTandTAG/mm10_bowtie2_index/mm10
 adapters: "/beegfs/scratch/ric.broccoli/kubacki.michal/SRF_MeDIP/DATA/TruSeq3-PE.fa"
 
-# Trimmomatic parameters
-trimmomatic_params: "LEADING:3 TRAILING:3 SLIDINGWINDOW:4:15 MINLEN:36"
+# Performance parameters
+threads: 16  # Increased default threads
+max_memory: "128G"  # Maximum memory to use
 
-# MACS2 parameters
-genome_size: "mm"  # for mouse genome
+# Tool-specific parameters
+trimmomatic_params: "ILLUMINACLIP:{adapters}:2:30:10 LEADING:3 TRAILING:3 SLIDINGWINDOW:4:15 MINLEN:36"
+bowtie2_params: "--very-sensitive --no-mixed --no-discordant"
+macs2_params: "--nomodel --extsize 300"
+
+# Analysis parameters
+genome_size: "mm"
 macs2_qvalue: 0.05
-
-# Differential methylation analysis parameters
 min_diff: 0.2
 fdr_threshold: 0.05
-
-# Functional annotation parameters
-go_database: "org.Mm.eg.db"  # for mouse
-kegg_database: "mmu"  # for mouse
 
 # Output directories
 fastqc_outdir: "output/fastqc"
@@ -30,6 +30,3 @@ func_annot_outdir: "output/func_annot"
 qc_outdir: "output/qc"
 bigwig_outdir: "output/bigwig"
 meth_level_outdir: "output/meth_level"
-
-# Resources
-threads: 4
