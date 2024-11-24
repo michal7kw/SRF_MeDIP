@@ -1,0 +1,41 @@
+__default__:
+    account: "--account=kubacki.michal"
+    partition: "--partition=normal"
+    ntasks: "--ntasks=1"
+    mem: "--mem=8G"
+    time: "--time=4:00:00"
+
+trimmomatic:
+    mem: "--mem=16G"
+    ntasks: "--ntasks=8"
+    time: "--time=6:00:00"
+
+align:
+    mem: "--mem=32G"
+    ntasks: "--ntasks=16"
+    time: "--time=12:00:00"
+
+mark_duplicates:
+    mem: "--mem=32G"
+    ntasks: "--ntasks=8"
+    time: "--time=8:00:00"
+
+call_peaks:
+    mem: "--mem=16G"
+    ntasks: "--ntasks=8"
+    time: "--time=8:00:00"
+
+sort_and_index:
+    mem: "--mem=16G"
+    ntasks: "--ntasks=8"
+    time: "--time=4:00:00"
+
+create_bigwig:
+    mem: "--mem=16G"
+    ntasks: "--ntasks=4"
+    time: "--time=4:00:00"
+
+fastqc:
+    mem: "--mem=8G"
+    ntasks: "--ntasks=2"
+    time: "--time=2:00:00" 
