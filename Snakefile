@@ -196,8 +196,9 @@ rule align:
         """
         set -e
         set -o pipefail
-        bowtie2 -p {threads} {params.extra} -x {params.index} -U {input} 2> {log} | \
-        samtools view -@ {threads} -bS - > {output}
+        (bowtie2 -p {threads} {params.extra} -x {params.index} -U {input} 2> {log} | \
+        samtools view -@ {threads} -bS - > {output}) && \
+        exit 0
         """
 
 # Rule to sort and index BAM files

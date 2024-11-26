@@ -15,13 +15,13 @@ source /opt/common/tools/ric.cosr/miniconda3/bin/activate
 conda activate jupyter_nb
 
 # Create directories
-mkdir -p logs/cluster
-mkdir -p output/{trimmed,aligned,dedup,peaks,fastqc,qc,func_annot,diff_meth,bigwig,meth_level}
+# mkdir -p logs/cluster
+# mkdir -p output/{trimmed,aligned,dedup,peaks,fastqc,qc,func_annot,diff_meth,bigwig,meth_level}
 
-# Clean up and unlock
-rm -f output/trimmed/*.fastq.gz
-rm -f output/aligned/*.bam
-rm -f .snakemake/metadata/*failed*
+# # Clean up and unlock
+# rm -f output/trimmed/*.fastq.gz
+# rm -f output/aligned/*.bam
+# rm -f .snakemake/metadata/*failed*
 snakemake --unlock
 
 # Create submission script
@@ -60,4 +60,4 @@ snakemake \
     2>&1 | tee "logs/snakemake_$(date +%Y%m%d_%H%M%S).log"
 
 # Cleanup
-rm -f submit_job.sh
+# rm -f submit_job.sh
